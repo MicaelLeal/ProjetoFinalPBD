@@ -9,11 +9,11 @@ insert into Nutricionista (nome, cpf, cod_instituicao) values
     ('Alberto', '222.222.222-22', 1),
     ('Rafaela', '333.333.333-33', 2);
 
-insert into Forncedor values (nome, cnpj) values
+insert into Fornecedor (nome, cnpj) values
     ('Carvalho Atacadista', '11.111.111/1111-11'),
     ('Mateus Supermercado', '22.222.222/2222-22');
 
-insert into Ingredientes (nome, tipo_quantidade) values
+insert into Ingrediente (nome, tipo_quantidade) values
     ('Arroz integral', 'kilograma'),
     ('Arroz parboilizado', 'kilograma'),
     ('Macarrao', 'kilograma'),
@@ -33,8 +33,7 @@ insert into Ingredientes (nome, tipo_quantidade) values
     ('Laranja', 'unidade'),
     ('Mamao', 'unidade'),
     ('Melancia', 'unidade'),
-    ('Melao', 'unidade'),
-    ('Uva passa', 'grama');
+    ('Melao', 'unidade');
 
 insert into Estoque values
     (1, 1, 500),

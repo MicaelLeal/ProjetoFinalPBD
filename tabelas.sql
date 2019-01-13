@@ -14,7 +14,7 @@ create table if not exists Nutricionista (
 );
 
 create table if not exists Fornecedor (
-    cod_fornecedor serial not null  primary key,
+    cod_fornecedor serial not null primary key,
     nome varchar(100) not null,
     cnpj varchar(18) not null
 );
@@ -33,8 +33,8 @@ create table if not exists Estoque (
 );
 
 create table if not exists Precos (
-    cod_fornecedor int not null,
-    cod_ingredinte int not null,
+    cod_fornecedor serial not null references Fornecedor(cod_fornecedor),
+    cod_ingredinte serial not null references Ingrediente(cod_ingredinte),
     valor float not null check ( valor >= 0 ),
     constraint pk_precos primary key (cod_fornecedor, cod_ingredinte)
 );
@@ -74,7 +74,7 @@ create table if not exists Tipo_cardapio (
 );
 
 create table if not exists Cardapio (
-    cod_tipo_cardapio int not null references  Tipo_cardapio(cod_tipo_cardapio),
+    cod_tipo_cardapio int not null references Tipo_cardapio(cod_tipo_cardapio),
     cod_prato int not null references Prato(cod_prato),
     constraint pk_cardapio primary key (cod_tipo_cardapio, cod_prato)
 );
