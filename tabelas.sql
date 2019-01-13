@@ -67,16 +67,16 @@ create table if not exists Receita (
     tipo_quantidade tipo_qtd not null
 );
 
-create table if not exists Cardapio (
-    cod_tipo_cardapio int not null references  Tipo_cardapio(cod_tipo_cardapio),
-    cod_prato int not null references Prato(cod_prato),
-    constraint pk_cardapio primary key (cod_tipo_cardapio, cod_prato)
-);
-
 create table if not exists Tipo_cardapio (
     cod_tipo_cardapio serial not null primary key,
     cod_nutricionista int not null references Nutricionista(cod_nutricionista),
     descricao varchar(250)
+);
+
+create table if not exists Cardapio (
+    cod_tipo_cardapio int not null references  Tipo_cardapio(cod_tipo_cardapio),
+    cod_prato int not null references Prato(cod_prato),
+    constraint pk_cardapio primary key (cod_tipo_cardapio, cod_prato)
 );
 
 create table if not exists Oferta (
