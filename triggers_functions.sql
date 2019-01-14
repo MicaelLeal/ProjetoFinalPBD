@@ -23,7 +23,9 @@ BEGIN
 
   ELSEIF (tg_op = 'UPDATE') THEN
     IF new.cod_pedido != old.cod_pedido
-      OR new.cod_nutricionista != old.cod_nutricionista THEN
+      OR new.cod_nutricionista != old.cod_nutricionista
+      OR new.cod_fornecedor != old.cod_fornecedor
+    THEN
       RAISE EXCEPTION 'O codigos não podem ser alterados';
     end if;
 
@@ -69,16 +71,73 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION item_pedido_procedure() RETURNS TRIGGER AS
 $$
+DECLARE
+  preco float;
 BEGIN
-  IF(tg_op = 'INSERT') THEN
+
+  IF (tg_op = 'INSERT') THEN
+    IF (SELECT finalizado FROM pedido WHERE cod_pedido = new.cod_pedido) THEN
+      RAISE EXCEPTION 'Um pedido finalizado não pode receber mais itens / codigo do pedido: %', new.cod_pedido;
+    END IF;
+
+    SELECT valor INTO preco
+    FROM precos NATURAL JOIN ingrediente
+    WHERE cod_ingredinte = new.cod_ingredinte
+      AND cod_fornecedor IN (
+      SELECT cod_fornecedor FROM pedido WHERE cod_pedido = new.cod_pedido LIMIT 1
+    )
+    ORDER BY valor
+    LIMIT 1;
+
+    IF preco IS NULL THEN
+      RAISE EXCEPTION 'O pedido não existe ou o fornecedor não tem esse ingrediente';
+    END IF;
+
+    new.valor_total = preco * new.quantidade;
+
     RETURN new;
 
   ELSEIF (tg_op = 'UPDATE') THEN
+    IF (SELECT finalizado FROM pedido WHERE cod_pedido = new.cod_pedido) THEN
+      RAISE EXCEPTION 'Um pedido finalizado não pode ter seus itens modificados / codigo do pedido: %', old.cod_pedido;
+    END IF;
+
+    IF new.cod_pedido != old.cod_pedido
+      OR new.cod_ingredinte != old.cod_ingredinte THEN
+      RAISE EXCEPTION 'Os codigos não podem ser alterados';
+    END IF;
+
+    IF new.quantidade != old.quantidade THEN
+      SELECT valor INTO preco
+      FROM precos NATURAL JOIN ingrediente
+      WHERE cod_ingredinte = new.cod_ingredinte
+        AND cod_fornecedor IN (
+        SELECT cod_fornecedor FROM pedido WHERE cod_pedido = new.cod_pedido LIMIT 1
+      );
+      new.valor_total = preco * new.quantidade;
+    END IF;
+
+    IF new.valor_total != old.valor_total THEN
+      SELECT valor INTO preco
+      FROM precos NATURAL JOIN ingrediente
+      WHERE cod_ingredinte = new.cod_ingredinte
+        AND cod_fornecedor IN (
+        SELECT cod_fornecedor FROM pedido WHERE cod_pedido = new.cod_pedido LIMIT 1
+      );
+      IF NOT new.valor_total = preco * new.quantidade THEN
+        RAISE EXCEPTION 'Valor total invalido';
+      END IF;
+    END IF;
+
     RETURN new;
 
   ELSEIF (tg_op = 'DELETE') THEN
+    IF (SELECT finalizado FROM pedido WHERE cod_pedido = old.cod_pedido) THEN
+      RAISE EXCEPTION 'Um pedido finalizado não pode ter seus itens deletados / codigo do pedido: %', old.cod_pedido;
+    END IF;
+
     RETURN old;
 
   END IF;
 END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;

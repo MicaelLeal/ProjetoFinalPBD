@@ -32,9 +32,9 @@ create table if not exists Estoque (
     constraint pk_estoque primary key (cod_instituicao, cod_ingredinte)
 );
 
-create table if not exists Precos (
-    cod_fornecedor serial not null references Fornecedor(cod_fornecedor),
-    cod_ingredinte serial not null references Ingrediente(cod_ingredinte),
+create table if not exists Preco (
+    cod_fornecedor int not null references Fornecedor(cod_fornecedor),
+    cod_ingredinte int not null references Ingrediente(cod_ingredinte),
     valor float not null check ( valor >= 0 ),
     constraint pk_precos primary key (cod_fornecedor, cod_ingredinte)
 );
@@ -42,6 +42,7 @@ create table if not exists Precos (
 create table if not exists Pedido (
     cod_pedido serial not null primary key,
     cod_nutricionista int not null references Nutricionista(cod_nutricionista),
+    cod_fornecedor int references Fornecedor(cod_fornecedor),
     data_pedido date,
     data_entrega date CONSTRAINT data_entrega_maior CHECK ( data_entrega >= data_pedido ),
     entregue boolean default false,
