@@ -14,7 +14,7 @@ BEGIN
     LOOP
       IF NOT passou THEN
         IF i ILIKE 'default' THEN
-          insert_string := insert_string || i ;
+          insert_string := insert_string || i;
           passou = TRUE;
         ELSE
           insert_string := insert_string || '''' || i || '''';
