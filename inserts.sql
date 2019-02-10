@@ -5,7 +5,7 @@ insert into Instituicao (nome, cnpj) values
     ('IFPI - Teresina Zona Sul', '88.888.888/8888-88');
 
 insert into Nutricionista (nome, cpf, cod_instituicao) values
-    ('Mariana', '111.111.111-11', 1),
+    ('Mariana', '111.111.111-11', 3),
     ('Alberto', '222.222.222-22', 1),
     ('Rafaela', '333.333.333-33', 2);
 

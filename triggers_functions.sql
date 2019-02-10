@@ -31,7 +31,11 @@ BEGIN
 
     IF new.data_pedido != old.data_pedido THEN
       RAISE EXCEPTION 'A data do pedido não pode ser alterada';
-    end if;
+    END IF;
+
+    IF new.data_entrega IS NOT NULL THEN
+      RAISE EXCEPTION 'A data de entrega é inserida pelo sistema';
+    END IF;
 
     IF old.finalizado IS TRUE AND new.finalizado IS NOT TRUE THEN
       RAISE EXCEPTION 'Esse pedido está finalizado';
@@ -43,7 +47,7 @@ BEGIN
 
     IF new.finalizado IS NOT TRUE THEN
 
-      IF new.entregue IS TRUE OR new.data_entrega IS NOT NULL THEN
+      IF new.entregue IS TRUE THEN
         RAISE EXCEPTION 'Um pedido não finalizado não pode ter sido entregue';
       END IF;
 
@@ -54,9 +58,7 @@ BEGIN
       END IF;
 
       IF new.entregue IS TRUE THEN
-        IF new.data_entrega IS NULL THEN
-          RAISE EXCEPTION 'A data de entrega é necessaria';
-        END IF;
+        new.data_entrega = now();
       END IF;
     END IF;
 
@@ -73,12 +75,22 @@ CREATE OR REPLACE FUNCTION item_pedido_procedure() RETURNS TRIGGER AS
 $$
 DECLARE
   preco float;
+  pedido_finalizado boolean;
 BEGIN
 
   IF (tg_op = 'INSERT') THEN
-    IF (SELECT finalizado FROM pedido WHERE cod_pedido = new.cod_pedido) THEN
-      RAISE EXCEPTION 'Um pedido finalizado não pode receber mais itens / codigo do pedido: %', new.cod_pedido;
+    SELECT finalizado INTO pedido_finalizado FROM pedido WHERE cod_pedido = new.cod_pedido;
+
+    IF pedido_finalizado IS NOT NULL THEN
+
+      IF (pedido_finalizado) THEN
+        RAISE EXCEPTION 'Um pedido finalizado não pode receber mais itens / codigo do pedido: %', new.cod_pedido;
+      END IF;
+
+    ELSE
+      RAISE EXCEPTION 'O pedido não existe';
     END IF;
+
 
     SELECT valor INTO preco
     FROM precos NATURAL JOIN ingrediente
@@ -90,7 +102,11 @@ BEGIN
     LIMIT 1;
 
     IF preco IS NULL THEN
-      RAISE EXCEPTION 'O pedido não existe ou o fornecedor não tem esse ingrediente';
+      RAISE EXCEPTION 'O fornecedor não tem esse ingrediente';
+    END IF;
+
+    IF new.valor_total IS NOT NULL THEN
+      RAISE EXCEPTION 'O valor total é calculado pelo sistema';
     END IF;
 
     new.valor_total = preco * new.quantidade;
@@ -107,6 +123,10 @@ BEGIN
       RAISE EXCEPTION 'Os codigos não podem ser alterados';
     END IF;
 
+    IF new.valor_total IS NOT NULL THEN
+      RAISE EXCEPTION 'O valor total é calculado pelo sistema';
+    END IF;
+
     IF new.quantidade != old.quantidade THEN
       SELECT valor INTO preco
       FROM precos NATURAL JOIN ingrediente
@@ -115,18 +135,6 @@ BEGIN
         SELECT cod_fornecedor FROM pedido WHERE cod_pedido = new.cod_pedido LIMIT 1
       );
       new.valor_total = preco * new.quantidade;
-    END IF;
-
-    IF new.valor_total != old.valor_total THEN
-      SELECT valor INTO preco
-      FROM precos NATURAL JOIN ingrediente
-      WHERE cod_ingredinte = new.cod_ingredinte
-        AND cod_fornecedor IN (
-        SELECT cod_fornecedor FROM pedido WHERE cod_pedido = new.cod_pedido LIMIT 1
-      );
-      IF NOT new.valor_total = preco * new.quantidade THEN
-        RAISE EXCEPTION 'Valor total invalido';
-      END IF;
     END IF;
 
     RETURN new;

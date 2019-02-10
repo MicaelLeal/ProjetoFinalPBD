@@ -64,11 +64,10 @@ create table if not exists Prato (
 );
 
 create table if not exists Receita (
-    cod_receita serial primary key,
     cod_prato int not null references Prato(cod_prato),
     cod_ingredinte int not null references Ingrediente(cod_ingredinte),
     quantidade int not null check ( quantidade >= 0 ),
-    tipo_quantidade tipo_qtd not null
+    constraint pk_receita primary key (cod_prato, cod_ingredinte)
 );
 
 create table if not exists Cardapio (
@@ -78,15 +77,15 @@ create table if not exists Cardapio (
 );
 
 create table if not exists Prato_cardapio (
-    cod_tipo_cardapio int not null references Cardapio(cod_cardapio),
+    cod_cardapio int not null references Cardapio(cod_cardapio),
     cod_prato int not null references Prato(cod_prato),
-    constraint pk_cardapio primary key (cod_tipo_cardapio, cod_prato)
+    constraint pk_cardapio primary key (cod_cardapio, cod_prato)
 );
 
 create table if not exists Oferta (
     cod_oferta serial not null primary key,
     cod_instituicao int not null references Instituicao(cod_instituicao),
-    cod_tipo_cardapio int not null references Cardapio(cod_cardapio),
+    cod_cardapio int not null references Cardapio(cod_cardapio),
     data_oferta date not null,
     quantidade_pessoas int not null check ( quantidade_pessoas >= 0 )
 );
