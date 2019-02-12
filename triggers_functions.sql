@@ -29,7 +29,7 @@ BEGIN
       OR new.cod_fornecedor != old.cod_fornecedor
     THEN
       RAISE EXCEPTION 'O codigos não podem ser alterados';
-    end if;
+    END IF;
 
     IF new.data_pedido != old.data_pedido THEN
       RAISE EXCEPTION 'A data do pedido não pode ser alterada';
@@ -215,7 +215,7 @@ BEGIN
       WHERE cod_ingredinte = old.cod_ingredinte
         AND cod_pedido IN (SELECT cod_pedido
                            FROM pedido
-                           WHERE finalizado = false
+                           WHERE finalizado = FALSE
                              AND cod_fornecedor = old.cod_fornecedor);
 
     END IF;
@@ -229,7 +229,7 @@ BEGIN
     WHERE cod_ingredinte = old.cod_ingredinte
       AND cod_pedido IN (SELECT cod_pedido
                          FROM pedido
-                         WHERE finalizado = false
+                         WHERE finalizado = FALSE
                            AND cod_fornecedor = old.cod_fornecedor);
 
     RETURN old;
@@ -310,8 +310,10 @@ BEGIN
           LOOP
             BEGIN
 
-              IF EXISTS(SELECT * FROM estoque
-              WHERE cod_instituicao = old.cod_instituicao AND cod_ingredinte = i.cod_ingredinte) THEN
+              IF EXISTS(SELECT *
+                        FROM estoque
+                        WHERE cod_instituicao = old.cod_instituicao
+                          AND cod_ingredinte = i.cod_ingredinte) THEN
                 IF i.tipo_quantidade = 'kilograma' THEN
                   UPDATE estoque
                   SET quantidade = quantidade - (i.quantidade * 1000 * old.quantidade_pessoas)
@@ -328,12 +330,12 @@ BEGIN
 
               ELSE
                 RAISE EXCEPTION 'A instuição não tem esse ingrediente em estoque (%)',
-                  (SELECT nome FROM ingrediente WHERE cod_ingredinte = i.cod_ingredinte);
+                    (SELECT nome FROM ingrediente WHERE cod_ingredinte = i.cod_ingredinte);
               END IF;
-            EXCEPTION WHEN check_violation THEN
-
-              RAISE exception 'Quantidade em estoque insuficiente (%)',
-                (SELECT nome FROM ingrediente WHERE cod_ingredinte = i.cod_ingredinte);
+            EXCEPTION
+              WHEN check_violation THEN
+                RAISE EXCEPTION 'Quantidade em estoque insuficiente (%)',
+                    (SELECT nome FROM ingrediente WHERE cod_ingredinte = i.cod_ingredinte);
 
             END;
           END LOOP;

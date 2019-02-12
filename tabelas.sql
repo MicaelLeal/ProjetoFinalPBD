@@ -32,7 +32,7 @@ create table if not exists Estoque (
     constraint pk_estoque primary key (cod_instituicao, cod_ingredinte)
 );
 
-create table if not exists Preco (
+create table if not exists Precos (
     cod_fornecedor int not null references Fornecedor(cod_fornecedor),
     cod_ingredinte int not null references Ingrediente(cod_ingredinte),
     valor float not null check ( valor >= 0 ),
