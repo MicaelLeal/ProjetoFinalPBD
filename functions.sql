@@ -135,13 +135,16 @@ $$
 DECLARE
 
   --   messagens   --
-  _lista_vazia          text := 'Você não passou os ingredientes. Pelamor de Deux.';
-  _diferentes_lengths   text := 'A lista de quantidades não confere com a de inguredientes.';
-  _prato_nao_cadastrado text := 'Prato não econtrado. Um novo prato com o nome passado foi criado.';
+  _lista_vazia           text    := 'Você não passou os ingredientes. Pelamor de Deux.';
+  _diferentes_lengths    text    := 'A lista de quantidades não confere com a de inguredientes.';
+  _prato_nao_cadastrado  text    := 'Prato não econtrado. Um novo prato com o nome passado foi criado.';
+  _ingred_nao_cadastrado text    := 'Ingrediente não encontrado. Se liga nas dicas na aba de menssagens!';
 
   --   variaveis   --
-  _i                    int;
-  _cod_prato            int;
+  _i                     int;
+  _cod_prato             int;
+  _nome_ingrediente      varchar;
+  _is_dica_enviada       boolean := FALSE;
 
 BEGIN
   SELECT array_upper(_ingredientes, 1) INTO _i;
@@ -150,7 +153,7 @@ BEGIN
     RAISE EXCEPTION '%', _diferentes_lengths;
   END IF;
 
-  IF _i <= 0 THEN
+  IF (_i ISNULL) OR (_i <= 0) THEN
     RAISE EXCEPTION '%', _lista_vazia;
   END IF;
 
@@ -161,15 +164,20 @@ BEGIN
     RAISE NOTICE '%', _prato_nao_cadastrado;
   END IF;
 
-  LOOP
-    IF _i <= 0 THEN
-      EXIT;
-    END IF;
+  FOR i IN 1.._i
+    LOOP
+      _nome_ingrediente := _ingredientes [ i];
 
-    RETURN QUERY SELECT * FROM add_ingrediente(_nome_prato, _ingredientes [ _i], _quantidade [ _i]);
-    _i := _i - 1;
+      IF exists(SELECT * FROM ingrediente WHERE nome ILIKE _nome_ingrediente) THEN
+        RETURN QUERY SELECT * FROM add_ingrediente(_nome_prato, _ingredientes [ i], _quantidade [ i]);
+      ELSIF NOT _is_dica_enviada THEN
+        _is_dica_enviada := TRUE;
+        RETURN QUERY SELECT * FROM add_ingrediente(_nome_prato, _ingredientes [ i], _quantidade [ i]);
+      ELSE
+        RETURN QUERY SELECT _nome_ingrediente, _ingred_nao_cadastrado;
+      END IF;
 
-  END LOOP;
+    END LOOP;
   RETURN;
 
 END;
@@ -286,3 +294,29 @@ BEGIN
   RETURN;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- CREATE OR REPLACE FUNCTION
+--   ofertar(_instituicao varchar, _desc_cardapio varchar, _data_oferta date, _qtd_pessoas int)
+--   RETURNS void AS
+-- $$
+-- DECLARE
+--   _cod_instituicao int;
+--   _cod_cardapio int;
+--
+-- BEGIN
+--
+--   SELECT cod_instituicao into _cod_instituicao from instituicao WHERE nome ILIKE _instituicao;
+--
+--   if _cod_instituicao ISNULL THEN
+--     raise NOTICE 'Instituição % não encontrada', _instituicao;
+--   END IF;
+--
+--   SELECT cod_cardapio INTO _cod_cardapio from cardapio where descricao ilike _desc_cardapio;
+--
+--   if _cod_cardapio ISNULL THEN
+--     RAISE NOTICE 'cardapio % não encontrado', _desc_cardapio;
+--   END IF;
+--
+-- END;
+-- $$ LANGUAGE plpgsql;
