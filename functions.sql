@@ -296,27 +296,159 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- CREATE OR REPLACE FUNCTION
---   ofertar(_instituicao varchar, _desc_cardapio varchar, _data_oferta date, _qtd_pessoas int)
---   RETURNS void AS
--- $$
--- DECLARE
---   _cod_instituicao int;
---   _cod_cardapio int;
---
--- BEGIN
---
---   SELECT cod_instituicao into _cod_instituicao from instituicao WHERE nome ILIKE _instituicao;
---
---   if _cod_instituicao ISNULL THEN
---     raise NOTICE 'Instituição % não encontrada', _instituicao;
---   END IF;
---
---   SELECT cod_cardapio INTO _cod_cardapio from cardapio where descricao ilike _desc_cardapio;
---
---   if _cod_cardapio ISNULL THEN
---     RAISE NOTICE 'cardapio % não encontrado', _desc_cardapio;
---   END IF;
---
--- END;
--- $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION
+  add_prato_in_cardapio(_desc_cardapio varchar, _nome_nutricionista varchar, _nome_prato varchar)
+  RETURNS table
+          (
+            nome_prato varchar,
+            status_operacao text
+          ) AS
+$$
+DECLARE
+--   messages  --
+  _status_ok text := 'Prato inserido ao cardápio com sucesso!';
+  _status_inexistente text := 'Prato passado não existe. Corrija o valor ou crie o prato.';
+  _status_ja_adicionado text := 'Este prato já havia sido adicionado a este cardápio';
+
+  _cod_cardapio      int;
+  _cod_nutricionista int;
+  _cod_prato         int;
+
+BEGIN
+
+  SELECT cod_cardapio INTO _cod_cardapio FROM cardapio WHERE descricao ILIKE _desc_cardapio;
+  IF _cod_cardapio ISNULL THEN
+    RAISE EXCEPTION 'Cardapio não existe. Corrija o valor ou cadastre o cardapio';
+  END IF;
+
+  SELECT cod_nutricionista INTO _cod_nutricionista FROM nutricionista WHERE nome ILIKE _nome_nutricionista;
+  IF _cod_nutricionista ISNULL THEN
+    RAISE EXCEPTION 'Nutricionista *%* não existe. corrija o valor', _nome_nutricionista;
+  END IF;
+
+  IF NOT exists(
+      SELECT * FROM cardapio WHERE cod_cardapio = _cod_cardapio AND cod_nutricionista = _cod_nutricionista)
+  THEN
+    RAISE EXCEPTION 'Esta nutricionista não tem permissão para alterar este cardápio.';
+  END IF;
+
+  SELECT cod_prato INTO _cod_prato FROM prato WHERE nome ILIKE _nome_prato;
+  IF _cod_prato ISNULL THEN
+    RETURN QUERY SELECT _nome_prato, _status_inexistente;
+    RETURN;
+  END IF;
+
+  INSERT INTO prato_cardapio VALUES (_cod_cardapio, _cod_prato);
+  RETURN QUERY SELECT _nome_prato, _status_ok;
+  RETURN;
+
+EXCEPTION
+  WHEN UNIQUE_VIOLATION THEN
+    RETURN QUERY SELECT _nome_prato, _status_ja_adicionado;
+    RETURN;
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION
+  criar_cardapio(_desc_cardapio varchar, _nome_nutricionista varchar, _pratos text[])
+  RETURNS table
+          (
+            nome_prato varchar,
+            status_operacao text
+          ) AS
+$$
+DECLARE
+  _nome_prato varchar;
+
+  _cod_cardapio int;
+  _cod_nutricionista int;
+  _cod_prato int;
+
+BEGIN
+  SELECT cod_nutricionista into _cod_nutricionista FROM nutricionista where nome ILIKE _nome_nutricionista;
+  if _cod_nutricionista ISNULL THEN
+    RAISE EXCEPTION 'Nutricionista *%* não existe.', _nome_nutricionista;
+  END IF;
+
+  if (array_length(_pratos, 1) <= 0) or (array_length(_pratos, 1) ISNULL) THEN
+    RAISE NOTICE '% ', array_length(_pratos, 1);
+    RAISE EXCEPTION 'Lista de pratos vazia, corija o parametro';
+  END IF;
+
+  if not exists(SELECT * from cardapio WHERE descricao = _desc_cardapio) THEN
+    INSERT INTO cardapio VALUES (DEFAULT, _cod_nutricionista, _desc_cardapio);
+    RAISE NOTICE 'Cardapio de descricao *%* não encontrado. Criamos ele para você.', _desc_cardapio;
+  END IF;
+
+  FOREACH _nome_prato IN ARRAY _pratos LOOP
+    RETURN QUERY SELECT * FROM add_prato_in_cardapio(_desc_cardapio, _nome_nutricionista, _nome_prato);
+  END LOOP;
+
+  RETURN ;
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION
+  ofertar(_instituicao varchar, _desc_cardapio varchar, _data_oferta date, _qtd_pessoas int)
+  RETURNS void AS
+$$
+DECLARE
+  _cod_instituicao int;
+  _cod_cardapio int;
+
+BEGIN
+
+  SELECT cod_instituicao into _cod_instituicao from instituicao WHERE nome ILIKE _instituicao;
+
+  if _cod_instituicao ISNULL THEN
+    raise EXCEPTION 'Instituição *%* não encontrada, corrija o valor.', _instituicao;
+  END IF;
+
+  SELECT cod_cardapio INTO _cod_cardapio from cardapio where descricao ilike _desc_cardapio;
+  if _cod_cardapio ISNULL THEN
+    RAISE EXCEPTION 'Cardápio de descrição *%* não encontrado. Corrija o valor ou crie o cardápio', _desc_cardapio;
+  END IF;
+
+  INSERT INTO oferta VALUES (_cod_instituicao, _cod_cardapio, _data_oferta, _qtd_pessoas, DEFAULT);
+  RAISE NOTICE 'SUCESSO!';
+
+EXCEPTION
+  WHEN UNIQUE_VIOLATION THEN
+    UPDATE oferta
+    SET cod_cardapio = _cod_cardapio
+    WHERE cod_instituicao = _cod_instituicao
+      AND data_oferta = _data_oferta;
+    RAISE NOTICE 'Oferta para essa data já foi cadastrada.';
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION
+  finalizar_oferta(_instituicao varchar, _data_oferta date)
+  RETURNS void AS
+$$
+DECLARE
+  _cod_instituicao int;
+
+BEGIN
+  SELECT cod_instituicao INTO _cod_instituicao FROM instituicao WHERE nome ILIKE _instituicao;
+  IF _cod_instituicao ISNULL THEN
+    RAISE EXCEPTION 'Isntituição *%* não encontrada.', _instituicao;
+  END IF;
+
+  IF NOT exists(SELECT * FROM oferta WHERE cod_instituicao = _cod_instituicao AND data_oferta = _data_oferta)
+  THEN
+    RAISE EXCEPTION 'Não foi encontrada uma oferta com essa data para essa instituicao.';
+  END IF;
+
+  UPDATE oferta SET finalizada = TRUE WHERE cod_instituicao = _cod_instituicao AND data_oferta = _data_oferta;
+  RAISE NOTICE 'SUCESSO!';
+
+END;
+$$ LANGUAGE plpgsql;
+

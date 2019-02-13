@@ -83,10 +83,10 @@ create table if not exists Prato_cardapio (
 );
 
 create table if not exists Oferta (
-    cod_oferta serial not null primary key,
     cod_instituicao int not null references Instituicao(cod_instituicao),
     cod_cardapio int not null references Cardapio(cod_cardapio),
     data_oferta date not null,
     quantidade_pessoas int not null check ( quantidade_pessoas >= 0 ),
-    finalizada boolean default false
+    finalizada boolean default false,
+    constraint pk_oferta primary key (cod_instituicao, data_oferta)
 );
