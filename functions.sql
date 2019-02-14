@@ -1,7 +1,30 @@
 CREATE OR REPLACE FUNCTION
+  listar_funcoes() RETURNS table
+                           (
+                             nome_funcao     varchar,
+                             parametros      text,
+                             tipo_parametros varchar
+                           ) AS
+$$
+BEGIN
+  RETURN QUERY SELECT proname::varchar,
+                      proargnames::text,
+                      pg_catalog.oidvectortypes(proargtypes)::varchar
+               FROM pg_catalog.pg_namespace n
+                      JOIN pg_catalog.pg_proc p
+                           ON p.pronamespace = n.oid
+               WHERE n.nspname = 'public'
+                 AND NOT p.prorettype = 2279
+               GROUP BY proname, proargnames, proargtypes
+               ORDER BY proname;
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION
   inserir(nome_tabela REGCLASS, VARIADIC args character varying[]) RETURNS VOID AS
 $$
-
 DECLARE
   insert_string character varying;
   i             character varying;
@@ -31,19 +54,19 @@ BEGIN
 
   insert_string := insert_string || ' )';
   EXECUTE insert_string;
-END;
 
+END;
 $$ LANGUAGE plpgsql;
 
+
 CREATE OR REPLACE FUNCTION
-  add_ingrediente(_nome_prato varchar(50), _nome_ingrediente varchar(60), _quantidade int)
+  add_ingrediente_ao_prato(_nome_prato varchar(50), _nome_ingrediente varchar(60), _quantidade int)
   RETURNS table
           (
             nome_ingrediente varchar,
             status_operacao  text
           ) AS
 $$
-
 DECLARE
   --     messages    --
   _sucesso                    text := 'Sucesso!';
@@ -58,11 +81,11 @@ DECLARE
       E'\nDicas:\n'
       || E'Para cadastrar um prato use o comando:\n'
       || ' >> SELECT inserir(' || '''' || 'prato' || '''' || ', VARIADIC ' || ''''
-      || '{DEFAULT, passe nome do prato aqui}' || '''' || ').'
+      || '{DEFAULT, ' || '''' || 'passe nome do prato aqui' || '''' || '}' || '''' || ').'
       || E'\n Ou cadastre já com os ingredientes de preparo:\n'
       || ' >> SELECT * from criar_receita(' || '''' || 'nome do prato aqui' || '''' || ', ARRAY [' || ''''
-      || 'ingrediente1' || '''' || ', ... , ' || '''' || 'ingredienteN' || '''' || '], ARRAY [' || ''''
-      || 'qtd_ingrediente1' || '''' || ', ... , ' || '''' || 'qtd_ingredienteN' || '''' || '])';
+      || 'ingrediente1' || '''' || ', ... , ' || '''' || 'ingredienteN' || '''' || '], ARRAY ['
+      || 'qtd_ingrediente1' || ', ... , ' || 'qtd_ingredienteN' || '])';
   _ingred_nao_cadastrado_dica text :=
       E'\nDica:\n'
       || E'Para cadastrar o ingrediente use o comando:\n'
@@ -120,8 +143,8 @@ EXCEPTION
     RETURN;
 
 END;
-
 $$ LANGUAGE plpgsql;
+
 
 CREATE OR REPLACE FUNCTION
   criar_receita(_nome_prato varchar(50), _ingredientes text[], _quantidade int[])
@@ -131,14 +154,19 @@ CREATE OR REPLACE FUNCTION
             status_operacao  text
           ) AS
 $$
-
 DECLARE
 
   --   messagens   --
   _lista_vazia           text    := 'Você não passou os ingredientes. Pelamor de Deux.';
-  _diferentes_lengths    text    := 'A lista de quantidades não confere com a de inguredientes.';
+  _diferentes_lengths    text    := 'A lista de quantidades não confere com a de inguredientes. Ambas devem'
+    || 'possuir a mesma quantidade de valores';
   _prato_nao_cadastrado  text    := 'Prato não econtrado. Um novo prato com o nome passado foi criado.';
   _ingred_nao_cadastrado text    := 'Ingrediente não encontrado. Se liga nas dicas na aba de menssagens!';
+
+  --   dicas  --
+  _add_ingrediente_dica  text    := E'\n Para adicionar ingredientes individualmente, use:\n'
+    || ' >> SELECT * from add_ingrediente(' || '''' || 'nome do prato aqui' || '''' || ', ' || ''''
+    || 'nome do ingrediente aqui' || '''' || ', ' || 'qtd_ingrediente aqui' || '])';
 
   --   variaveis   --
   _i                     int;
@@ -150,11 +178,13 @@ BEGIN
   SELECT array_upper(_ingredientes, 1) INTO _i;
 
   IF (_i <> array_upper(_quantidade, 1)) THEN
-    RAISE EXCEPTION '%', _diferentes_lengths;
+    RAISE NOTICE '%', _diferentes_lengths;
+    RETURN;
   END IF;
 
   IF (_i ISNULL) OR (_i <= 0) THEN
-    RAISE EXCEPTION '%', _lista_vazia;
+    RAISE NOTICE '%', _lista_vazia;
+    RETURN;
   END IF;
 
   SELECT cod_prato INTO _cod_prato FROM prato WHERE nome ILIKE _nome_prato;
@@ -169,20 +199,21 @@ BEGIN
       _nome_ingrediente := _ingredientes [ i];
 
       IF exists(SELECT * FROM ingrediente WHERE nome ILIKE _nome_ingrediente) THEN
-        RETURN QUERY SELECT * FROM add_ingrediente(_nome_prato, _ingredientes [ i], _quantidade [ i]);
+        RETURN QUERY SELECT * FROM add_ingrediente_ao_prato(_nome_prato, _ingredientes [ i], _quantidade [ i]);
       ELSIF NOT _is_dica_enviada THEN
         _is_dica_enviada := TRUE;
-        RETURN QUERY SELECT * FROM add_ingrediente(_nome_prato, _ingredientes [ i], _quantidade [ i]);
+        RETURN QUERY SELECT * FROM add_ingrediente_ao_prato(_nome_prato, _ingredientes [ i], _quantidade [ i]);
       ELSE
         RETURN QUERY SELECT _nome_ingrediente, _ingred_nao_cadastrado;
       END IF;
 
     END LOOP;
+  RAISE NOTICE '%', _add_ingrediente_dica;
   RETURN;
 
 END;
-
 $$ LANGUAGE plpgsql;
+
 
 CREATE OR REPLACE FUNCTION novo_pedido(nome_nutricionista varchar,
                                        nomes_ingredientes varchar[],
@@ -200,7 +231,8 @@ DECLARE
 BEGIN
   IF array_length(nomes_ingredientes, 1) != array_length(qtds_ingredientes, 1)
   THEN
-    RAISE EXCEPTION 'A quantidade de ingrediente e quantidades devem ser iguais';
+    RAISE NOTICE 'A quantidade de ingrediente e quantidades devem ser iguais';
+    RETURN;
   END IF;
 
   SELECT cod_nutricionista INTO _cod_nutricionista FROM nutricionista WHERE nome ILIKE nome_nutricionista;
@@ -208,6 +240,7 @@ BEGIN
   IF _cod_nutricionista IS NULL
   THEN
     RAISE NOTICE 'O nutricionista %s não existe', nome_nutricionista;
+    RETURN;
   END IF;
 
   FOR i IN 1..array_length(nomes_ingredientes, 1)
@@ -300,41 +333,60 @@ CREATE OR REPLACE FUNCTION
   add_prato_in_cardapio(_desc_cardapio varchar, _nome_nutricionista varchar, _nome_prato varchar)
   RETURNS table
           (
-            nome_prato varchar,
+            nome_prato      varchar,
             status_operacao text
           ) AS
 $$
 DECLARE
---   messages  --
-  _status_ok text := 'Prato inserido ao cardápio com sucesso!';
-  _status_inexistente text := 'Prato passado não existe. Corrija o valor ou crie o prato.';
-  _status_ja_adicionado text := 'Este prato já havia sido adicionado a este cardápio';
+  --   messages  --
+  _status_ok                text := 'Prato inserido ao cardápio com sucesso!';
+  _status_inexistente       text := 'Prato passado não existe. Corrija o valor ou crie o prato.';
+  _status_ja_adicionado     text := 'Este prato já havia sido adicionado a este cardápio';
+  _status_prato_sem_receita text := 'Este prato não possui sua receita cadastrada';
 
-  _cod_cardapio      int;
-  _cod_nutricionista int;
-  _cod_prato         int;
+  --   dica  --
+  _cardapio_nao_existe_dica text := E'Para cadastrar um cardapio use o comando:\n'
+    || ' >> SELECT * from criar_cardapio(' || '''' || 'descrição do cardapio aqui' || '''' || ', ' || ''''
+    || 'nome da nutricionista aqui' || '''' || ', ' || 'ARRAY [' || 'prato1' || ', ... , ' || 'pratoN' || '])';
+  _prato_sem_receita_dica   text := E'\n Para criar receita use:\n'
+    || ' >> SELECT * from criar_receita(' || '''' || 'nome do prato aqui' || '''' || ', ARRAY [' || ''''
+    || 'ingrediente1' || '''' || ', ... , ' || '''' || 'ingredienteN' || '''' || '], ARRAY ['
+    || 'qtd_ingrediente1' || ', ... , ' || 'qtd_ingredienteN' || '])';
+  _cod_cardapio             int;
+  _cod_nutricionista        int;
+  _cod_prato                int;
 
 BEGIN
 
   SELECT cod_cardapio INTO _cod_cardapio FROM cardapio WHERE descricao ILIKE _desc_cardapio;
   IF _cod_cardapio ISNULL THEN
-    RAISE EXCEPTION 'Cardapio não existe. Corrija o valor ou cadastre o cardapio';
+    RAISE NOTICE 'Cardapio não existe. Corrija o valor ou cadastre o cardapio';
+    RAISE NOTICE '%', _cardapio_nao_existe_dica;
+    RETURN;
   END IF;
 
   SELECT cod_nutricionista INTO _cod_nutricionista FROM nutricionista WHERE nome ILIKE _nome_nutricionista;
   IF _cod_nutricionista ISNULL THEN
-    RAISE EXCEPTION 'Nutricionista *%* não existe. corrija o valor', _nome_nutricionista;
+    RAISE NOTICE 'Nutricionista *%* não existe. corrija o valor', _nome_nutricionista;
+    RETURN;
   END IF;
 
   IF NOT exists(
       SELECT * FROM cardapio WHERE cod_cardapio = _cod_cardapio AND cod_nutricionista = _cod_nutricionista)
   THEN
-    RAISE EXCEPTION 'Esta nutricionista não tem permissão para alterar este cardápio.';
+    RAISE NOTICE 'Esta nutricionista não tem permissão para alterar este cardápio.';
+    RETURN;
   END IF;
 
   SELECT cod_prato INTO _cod_prato FROM prato WHERE nome ILIKE _nome_prato;
   IF _cod_prato ISNULL THEN
     RETURN QUERY SELECT _nome_prato, _status_inexistente;
+    RETURN;
+  END IF;
+
+  IF NOT exists(SELECT * FROM receita WHERE cod_prato = _cod_prato) THEN
+    RAISE NOTICE '%', _prato_sem_receita_dica;
+    RETURN QUERY SELECT _nome_prato, _status_prato_sem_receita;
     RETURN;
   END IF;
 
@@ -355,38 +407,36 @@ CREATE OR REPLACE FUNCTION
   criar_cardapio(_desc_cardapio varchar, _nome_nutricionista varchar, _pratos text[])
   RETURNS table
           (
-            nome_prato varchar,
+            nome_prato      varchar,
             status_operacao text
           ) AS
 $$
 DECLARE
-  _nome_prato varchar;
-
-  _cod_cardapio int;
+  _nome_prato        varchar;
   _cod_nutricionista int;
-  _cod_prato int;
 
 BEGIN
-  SELECT cod_nutricionista into _cod_nutricionista FROM nutricionista where nome ILIKE _nome_nutricionista;
-  if _cod_nutricionista ISNULL THEN
-    RAISE EXCEPTION 'Nutricionista *%* não existe.', _nome_nutricionista;
+  SELECT cod_nutricionista INTO _cod_nutricionista FROM nutricionista WHERE nome ILIKE _nome_nutricionista;
+  IF _cod_nutricionista ISNULL THEN
+    RAISE NOTICE 'Nutricionista *%* não existe.', _nome_nutricionista;
+    RETURN;
   END IF;
 
-  if (array_length(_pratos, 1) <= 0) or (array_length(_pratos, 1) ISNULL) THEN
-    RAISE NOTICE '% ', array_length(_pratos, 1);
-    RAISE EXCEPTION 'Lista de pratos vazia, corija o parametro';
+  IF (array_length(_pratos, 1) <= 0) OR (array_length(_pratos, 1) ISNULL) THEN
+    RAISE NOTICE 'Lista de pratos vazia, corija o parametro';
   END IF;
 
-  if not exists(SELECT * from cardapio WHERE descricao = _desc_cardapio) THEN
+  IF NOT exists(SELECT * FROM cardapio WHERE descricao = _desc_cardapio) THEN
     INSERT INTO cardapio VALUES (DEFAULT, _cod_nutricionista, _desc_cardapio);
     RAISE NOTICE 'Cardapio de descricao *%* não encontrado. Criamos ele para você.', _desc_cardapio;
   END IF;
 
-  FOREACH _nome_prato IN ARRAY _pratos LOOP
-    RETURN QUERY SELECT * FROM add_prato_in_cardapio(_desc_cardapio, _nome_nutricionista, _nome_prato);
-  END LOOP;
+  FOREACH _nome_prato IN ARRAY _pratos
+    LOOP
+      RETURN QUERY SELECT * FROM add_prato_in_cardapio(_desc_cardapio, _nome_nutricionista, _nome_prato);
+    END LOOP;
 
-  RETURN ;
+  RETURN;
 
 END;
 $$ LANGUAGE plpgsql;
@@ -398,19 +448,21 @@ CREATE OR REPLACE FUNCTION
 $$
 DECLARE
   _cod_instituicao int;
-  _cod_cardapio int;
+  _cod_cardapio    int;
 
 BEGIN
 
-  SELECT cod_instituicao into _cod_instituicao from instituicao WHERE nome ILIKE _instituicao;
+  SELECT cod_instituicao INTO _cod_instituicao FROM instituicao WHERE nome ILIKE _instituicao;
 
-  if _cod_instituicao ISNULL THEN
-    raise EXCEPTION 'Instituição *%* não encontrada, corrija o valor.', _instituicao;
+  IF _cod_instituicao ISNULL THEN
+    RAISE NOTICE 'Instituição *%* não encontrada, corrija o valor.', _instituicao;
+    RETURN;
   END IF;
 
-  SELECT cod_cardapio INTO _cod_cardapio from cardapio where descricao ilike _desc_cardapio;
-  if _cod_cardapio ISNULL THEN
-    RAISE EXCEPTION 'Cardápio de descrição *%* não encontrado. Corrija o valor ou crie o cardápio', _desc_cardapio;
+  SELECT cod_cardapio INTO _cod_cardapio FROM cardapio WHERE descricao ILIKE _desc_cardapio;
+  IF _cod_cardapio ISNULL THEN
+    RAISE NOTICE 'Cardápio de descrição *%* não encontrado. Corrija o valor ou crie o cardápio', _desc_cardapio;
+    RETURN;
   END IF;
 
   INSERT INTO oferta VALUES (_cod_instituicao, _cod_cardapio, _data_oferta, _qtd_pessoas, DEFAULT);
@@ -422,7 +474,10 @@ EXCEPTION
     SET cod_cardapio = _cod_cardapio
     WHERE cod_instituicao = _cod_instituicao
       AND data_oferta = _data_oferta;
-    RAISE NOTICE 'Oferta para essa data já foi cadastrada.';
+    RAISE NOTICE 'Oferta para essa data já foi cadastrada. Cardápio foi atualizado';
+
+  WHEN RAISE_EXCEPTION THEN
+    RAISE NOTICE 'Erro: %', SQLERRM;
 
 END;
 $$ LANGUAGE plpgsql;
@@ -438,16 +493,22 @@ DECLARE
 BEGIN
   SELECT cod_instituicao INTO _cod_instituicao FROM instituicao WHERE nome ILIKE _instituicao;
   IF _cod_instituicao ISNULL THEN
-    RAISE EXCEPTION 'Isntituição *%* não encontrada.', _instituicao;
+    RAISE NOTICE 'Isntituição *%* não encontrada.', _instituicao;
+    RETURN;
   END IF;
 
   IF NOT exists(SELECT * FROM oferta WHERE cod_instituicao = _cod_instituicao AND data_oferta = _data_oferta)
   THEN
-    RAISE EXCEPTION 'Não foi encontrada uma oferta com essa data para essa instituicao.';
+    RAISE NOTICE 'Não foi encontrada uma oferta para essa data na instituicao passada.';
+    RETURN;
   END IF;
 
   UPDATE oferta SET finalizada = TRUE WHERE cod_instituicao = _cod_instituicao AND data_oferta = _data_oferta;
   RAISE NOTICE 'SUCESSO!';
+
+EXCEPTION
+  WHEN RAISE_EXCEPTION THEN
+    RAISE NOTICE 'Erro: %', SQLERRM;
 
 END;
 $$ LANGUAGE plpgsql;

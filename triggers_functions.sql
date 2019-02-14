@@ -282,9 +282,8 @@ BEGIN
       RAISE EXCEPTION 'Uma oferta finalizada não pode ser alterada';
     END IF;
 
-    IF new.cod_instituicao != old.cod_instituicao
-      OR new.cod_cardapio != old.cod_cardapio THEN
-      RAISE EXCEPTION 'Os codigos de instituição e cardapio não podem ser alterados';
+    IF new.cod_instituicao != old.cod_instituicao THEN
+      RAISE EXCEPTION 'O codigo da instituição não pode ser alterado';
     END IF;
 
     IF new.data_oferta <= now() THEN
