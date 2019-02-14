@@ -2,20 +2,17 @@ CREATE OR REPLACE FUNCTION
   listar_funcoes() RETURNS table
                            (
                              nome_funcao     varchar,
-                             parametros      text,
-                             tipo_parametros varchar
+                             parametros      text
                            ) AS
 $$
 BEGIN
   RETURN QUERY SELECT proname::varchar,
-                      proargnames::text,
-                      pg_catalog.oidvectortypes(proargtypes)::varchar
+                      pg_catalog.pg_get_function_arguments(p.oid)::text
                FROM pg_catalog.pg_namespace n
                       JOIN pg_catalog.pg_proc p
                            ON p.pronamespace = n.oid
                WHERE n.nspname = 'public'
                  AND NOT p.prorettype = 2279
-               GROUP BY proname, proargnames, proargtypes
                ORDER BY proname;
 
 END;
@@ -54,6 +51,13 @@ BEGIN
 
   insert_string := insert_string || ' )';
   EXECUTE insert_string;
+
+EXCEPTION
+  WHEN raise_exception THEN
+    RAISE NOTICE 'Erros: %', SQLERRM;
+    RETURN;
+  WHEN OTHERS THEN
+    RAISE NOTICE 'Erro de sintaxe: %', SQLERRM;
 
 END;
 $$ LANGUAGE plpgsql;
@@ -116,6 +120,9 @@ BEGIN
   END IF;
 
   SELECT tipo_quantidade INTO _tipo_quantidade FROM ingrediente WHERE cod_ingredinte = _cod_ingrediente;
+  IF (_tipo_quantidade::text ILIKE 'kilograma') THEN
+    _tipo_quantidade := 'grama';
+  END IF;
 
   INSERT INTO receita VALUES (_cod_prato, _cod_ingrediente, _quantidade, _tipo_quantidade);
 
@@ -412,6 +419,7 @@ CREATE OR REPLACE FUNCTION
           ) AS
 $$
 DECLARE
+  _cod_cardapio      int;
   _nome_prato        varchar;
   _cod_nutricionista int;
 
@@ -427,7 +435,8 @@ BEGIN
   END IF;
 
   IF NOT exists(SELECT * FROM cardapio WHERE descricao = _desc_cardapio) THEN
-    INSERT INTO cardapio VALUES (DEFAULT, _cod_nutricionista, _desc_cardapio);
+    INSERT INTO cardapio
+    VALUES (DEFAULT, _cod_nutricionista, _desc_cardapio) RETURNING cod_cardapio INTO _cod_cardapio;
     RAISE NOTICE 'Cardapio de descricao *%* não encontrado. Criamos ele para você.', _desc_cardapio;
   END IF;
 
@@ -436,7 +445,15 @@ BEGIN
       RETURN QUERY SELECT * FROM add_prato_in_cardapio(_desc_cardapio, _nome_nutricionista, _nome_prato);
     END LOOP;
 
+  IF NOT exists(SELECT * FROM prato_cardapio WHERE cod_cardapio = _cod_cardapio) THEN
+    RAISE EXCEPTION '';
+  END IF;
+
   RETURN;
+
+EXCEPTION
+  WHEN RAISE_EXCEPTION  THEN
+  RETURN ;
 
 END;
 $$ LANGUAGE plpgsql;
@@ -521,3 +538,49 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
+
+CREATE OR REPLACE FUNCTION
+  remover_ingrediente_do_prato(_nome_prato varchar(50), _nome_ingrediente varchar(60))
+  RETURNS table
+          (
+            nome_ingrediente varchar,
+            status_operacao  text
+          ) AS
+$$
+DECLARE
+  --     messages    --
+  _sucesso                    text := 'Sucesso!';
+  _inexistente                  text := 'Este ingrediente não está incluido na receita.';
+  _prato_nao_cadastrado       text := 'Prato não encontrado.';
+  _ingred_nao_cadastrado      text := 'Ingrediente não encontrado.';
+
+  --   variaveis --
+  _cod_prato                  int;
+  _cod_ingrediente            int;
+
+BEGIN
+  SELECT cod_prato INTO _cod_prato FROM prato WHERE nome ILIKE _nome_prato;
+  SELECT cod_ingredinte INTO _cod_ingrediente FROM ingrediente WHERE nome ILIKE _nome_ingrediente;
+
+  IF _cod_prato ISNULL THEN
+    RETURN QUERY SELECT _nome_ingrediente, _prato_nao_cadastrado;
+    RETURN;
+  END IF;
+
+  IF _cod_ingrediente ISNULL THEN
+    RETURN QUERY SELECT _nome_ingrediente, _ingred_nao_cadastrado;
+    RETURN;
+  END IF;
+
+  if not exists(SELECT * from receita WHERE cod_ingredinte = _cod_ingrediente and cod_prato = _cod_prato) THEN
+    RETURN QUERY SELECT _nome_ingrediente, _inexistente;
+    RETURN;
+  END IF;
+
+  DELETE from receita WHERE cod_ingredinte = _cod_ingrediente and cod_prato = _cod_prato;
+
+  RETURN QUERY SELECT _nome_ingrediente, _sucesso;
+  RETURN;
+
+END;
+$$ LANGUAGE plpgsql;

@@ -65,7 +65,7 @@ create table if not exists Prato (
 create table if not exists Receita (
     cod_prato int not null references Prato(cod_prato),
     cod_ingredinte int not null references Ingrediente(cod_ingredinte),
-    quantidade int not null check ( quantidade >= 0 ),
+    quantidade int not null check ( quantidade > 0 ),
     tipo_quantidade tipo_qtd not null,
     constraint pk_receita primary key (cod_prato, cod_ingredinte)
 );
@@ -86,7 +86,7 @@ create table if not exists Oferta (
     cod_instituicao int not null references Instituicao(cod_instituicao),
     cod_cardapio int not null references Cardapio(cod_cardapio),
     data_oferta date not null,
-    quantidade_pessoas int not null check ( quantidade_pessoas >= 0 ),
+    quantidade_pessoas int not null check ( quantidade_pessoas > 0 ),
     finalizada boolean default false,
     constraint pk_oferta primary key (cod_instituicao, data_oferta)
 );

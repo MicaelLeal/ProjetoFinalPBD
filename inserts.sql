@@ -5,7 +5,7 @@ insert into Instituicao (nome, cnpj) values
     ('IFPI - Teresina Zona Sul', '88.888.888/8888-88');
 
 insert into Nutricionista (nome, cpf, cod_instituicao) values
-    ('Mariana', '111.111.111-11', 3),
+    ('Mariana', '111.111.111-11', 1),
     ('Alberto', '222.222.222-22', 1),
     ('Rafaela', '333.333.333-33', 2);
 
@@ -45,7 +45,7 @@ insert into Estoque values
     (1, 13, 50),
     (1, 15, 20),
     (1, 19, 15),
-    (1, 21, 900),
+    (1, 20, 900),
     (2, 2, 400),
     (2, 3, 100),
     (2, 5, 200),
@@ -53,7 +53,7 @@ insert into Estoque values
     (2, 10, 50),
     (2, 12, 50),
     (2, 13, 50),
-    (2, 15, 20),
+    (2, 15, 20);
 
 insert into Precos values 
     (1, 1, 5.0),
