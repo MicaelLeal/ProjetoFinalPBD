@@ -470,11 +470,19 @@ BEGIN
 
 EXCEPTION
   WHEN UNIQUE_VIOLATION THEN
-    UPDATE oferta
-    SET cod_cardapio = _cod_cardapio
-    WHERE cod_instituicao = _cod_instituicao
-      AND data_oferta = _data_oferta;
-    RAISE NOTICE 'Oferta para essa data já foi cadastrada. Cardápio foi atualizado';
+    BEGIN
+      UPDATE oferta
+      SET cod_cardapio = _cod_cardapio
+      WHERE cod_instituicao = _cod_instituicao
+        AND data_oferta = _data_oferta;
+      RAISE NOTICE 'Oferta para essa data já foi cadastrada. Cardápio foi atualizado';
+    EXCEPTION
+      WHEN RAISE_EXCEPTION THEN
+        RAISE NOTICE 'Erro: %', SQLERRM;
+    END;
+
+  WHEN RAISE_EXCEPTION THEN
+    RAISE NOTICE 'Erro: %', SQLERRM;
 
   WHEN RAISE_EXCEPTION THEN
     RAISE NOTICE 'Erro: %', SQLERRM;
@@ -508,7 +516,7 @@ BEGIN
 
 EXCEPTION
   WHEN RAISE_EXCEPTION THEN
-    RAISE NOTICE 'Erro: %', SQLERRM;
+    RAISE NOTICE 'Esta oferta já havia sido finalizada.';
 
 END;
 $$ LANGUAGE plpgsql;
